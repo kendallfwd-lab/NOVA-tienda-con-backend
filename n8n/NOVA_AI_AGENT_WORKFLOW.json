@@ -1,0 +1,158 @@
+{
+  "name": "NOVA SUPPLY | Asistente comercial con AI Agent",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "nova-asistente",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "nova-webhook",
+      "name": "Webhook - React",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [260, 300],
+      "webhookId": "nova-asistente"
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $input.first().json.body ?? $input.first().json; const tipo = body.tipo; if (!['descripcion','recomendaciones'].includes(tipo)) throw new Error('Tipo invalido: usar descripcion o recomendaciones'); const producto_id = Number(body.producto_id || 0); const carrito = Array.isArray(body.carrito) ? body.carrito.map(Number).filter(Number.isSafeInteger).slice(0,20) : []; if (tipo === 'descripcion' && (!Number.isSafeInteger(producto_id) || producto_id <= 0)) throw new Error('producto_id invalido'); return [{json:{tipo,producto_id,carrito}}];"
+      },
+      "id": "nova-validate",
+      "name": "Validar entrada",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [490, 300]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "http://localhost:3002/api/productos",
+        "options": {
+          "timeout": 15000
+        }
+      },
+      "id": "nova-catalog",
+      "name": "API - Leer catalogo (CONFIGURAR URL)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [730, 300],
+      "notesInFlow": true,
+      "notes": "La URL viene configurada para esta API en http://localhost:3002/api/productos. Si cambias el puerto, usa http://localhost:<PORT>/api/productos con n8n npm local o http://host.docker.internal:<PORT>/api/productos con n8n Docker. En n8n Cloud configura una URL HTTPS publica hacia tu API."
+    },
+    {
+      "parameters": {
+        "jsCode": "const entrada = $('Validar entrada').first().json; const raw = $input.all().map(i => i.json); const catalogo = raw.flatMap(i => Array.isArray(i) ? i : Array.isArray(i.data) ? i.data : [i]); const disponibles = catalogo.filter(p => p && p.stock > 0).map(p => ({id:p.id,nombre:p.nombre,categoria:p.categoria,descripcion:p.descripcion,precio:p.precio,stock:p.stock})); if (!disponibles.length) throw new Error('No se pudieron leer productos disponibles de la API'); let prompt; if (entrada.tipo === 'descripcion') { const p = catalogo.find(p => Number(p.id) === entrada.producto_id); if (!p) throw new Error('Producto solicitado no existe'); prompt = 'Escribe en espanol una descripcion comercial original de 45 a 75 palabras, fiel a estos datos y sin prometer atributos que no aparecen. Producto: ' + JSON.stringify(p) + '. Devuelve texto simple para la tienda.'; } else { prompt = 'Sugiere hasta 3 productos COMPLEMENTARIOS disponibles para este carrito (IDs ' + JSON.stringify(entrada.carrito) + '). No recomiendes productos ya presentes; usa exclusivamente este catalogo: ' + JSON.stringify(disponibles) + '. Indica nombre, por que sirve y precio en colones. Si el carrito esta vacio, elige 3 productos destacados. Devuelve texto en espanol en formato breve, legible y sin markdown complejo.'; } return [{json:{prompt,tipo:entrada.tipo}}];"
+      },
+      "id": "nova-prompt",
+      "name": "Preparar contexto real",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [970, 300]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.prompt }}",
+        "options": {
+          "systemMessage": "Eres NOVA AI, asistente comercial responsable de una tienda academica costarricense. Usa solamente los datos del catalogo proporcionado, no inventes caracteristicas, stock, descuentos o precios. Nunca ejecutes compras ni cambies inventario. El idioma es espanol claro y natural. Puedes utilizar la calculadora cuando sea necesario para comprobar cifras. Responde solo la informacion util solicitada; las respuestas seran revisadas por una persona."
+        }
+      },
+      "id": "nova-agent",
+      "name": "AI Agent - NOVA",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 2.2,
+      "position": [1220, 300]
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "gpt-4o-mini",
+          "mode": "list",
+          "cachedResultName": "gpt-4o-mini"
+        },
+        "options": {
+          "temperature": 0.4
+        }
+      },
+      "id": "nova-chatmodel",
+      "name": "OpenAI Chat Model (AGREGAR CREDENCIAL)",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [1130, 550],
+      "notesInFlow": true,
+      "notes": "Agregar una credencial OpenAI Chat Model propia despues de importar. Ninguna credencial viaja en el JSON."
+    },
+    {
+      "parameters": {},
+      "id": "nova-tool",
+      "name": "Calculator - Comprobar cifras",
+      "type": "@n8n/n8n-nodes-langchain.toolCalculator",
+      "typeVersion": 1,
+      "position": [1380, 550]
+    },
+    {
+      "parameters": {
+        "jsCode": "const output = String($input.first().json.output ?? '').trim(); if (!output) throw new Error('El agente no devolvio contenido'); const tipo = $('Validar entrada').first().json.tipo; return [{json:{ok:true,data:{modo:'n8n-ai-agent',tipo,respuesta:output},error:null}}];"
+      },
+      "id": "nova-format",
+      "name": "Formatear contrato JSON",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1490, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              { "name": "Access-Control-Allow-Origin", "value": "*" },
+              { "name": "Access-Control-Allow-Headers", "value": "Content-Type" }
+            ]
+          }
+        }
+      },
+      "id": "nova-response",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1720, 300]
+    }
+  ],
+  "connections": {
+    "Webhook - React": {
+      "main": [[{"node":"Validar entrada","type":"main","index":0}]]
+    },
+    "Validar entrada": {
+      "main": [[{"node":"API - Leer catalogo (CONFIGURAR URL)","type":"main","index":0}]]
+    },
+    "API - Leer catalogo (CONFIGURAR URL)": {
+      "main": [[{"node":"Preparar contexto real","type":"main","index":0}]]
+    },
+    "Preparar contexto real": {
+      "main": [[{"node":"AI Agent - NOVA","type":"main","index":0}]]
+    },
+    "OpenAI Chat Model (AGREGAR CREDENCIAL)": {
+      "ai_languageModel": [[{"node":"AI Agent - NOVA","type":"ai_languageModel","index":0}]]
+    },
+    "Calculator - Comprobar cifras": {
+      "ai_tool": [[{"node":"AI Agent - NOVA","type":"ai_tool","index":0}]]
+    },
+    "AI Agent - NOVA": {
+      "main": [[{"node":"Formatear contrato JSON","type":"main","index":0}]]
+    },
+    "Formatear contrato JSON": {
+      "main": [[{"node":"Respond to Webhook","type":"main","index":0}]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "active": false,
+  "pinData": {},
+  "tags": []
+}

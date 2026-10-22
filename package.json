@@ -1,0 +1,14 @@
+{
+  "name": "nova-commerce-laboratorio-2",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Laboratorio 2: tienda online con Express, SQLite, React y n8n",
+  "scripts": {
+    "setup": "npm install --prefix backend && npm install --prefix frontend",
+    "dev:api": "npm run dev --prefix backend",
+    "dev:web": "npm run dev --prefix frontend",
+    "test": "npm test --prefix backend",
+    "build": "npm run build --prefix frontend"
+  },
+  "engines": { "node": ">=22.13.0" }
+}

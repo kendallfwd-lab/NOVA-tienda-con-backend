@@ -1,0 +1,135 @@
+{
+  "info": {
+    "_postman_id": "d04b20e9-cb5d-4f9e-8e52-b825411a8d21",
+    "name": "NOVA / SUPPLY — Laboratorio 2 | API y casos de error",
+    "description": "Ejecuta la colección en orden con el backend encendido. Crea registros de prueba reales y valida 200, 201, 400, 404 y 409.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {"key":"baseUrl","value":"http://localhost:3002/api"},
+    {"key":"testProductId","value":""},
+    {"key":"testClientId","value":""},
+    {"key":"testEmail","value":""},
+    {"key":"testOrderId","value":""}
+  ],
+  "item": [
+    {
+      "name": "01 — Salud de la API | 200",
+      "request": {"method":"GET","url":"{{baseUrl}}/health"},
+      "event":[{"listen":"test","script":{"exec":["pm.test('200 API activa',()=>pm.response.to.have.status(200));","pm.test('ok verdadero',()=>pm.expect(pm.response.json().ok).to.eql(true));"]}}]
+    },
+    {
+      "name": "02 — Listar y filtrar productos | 200",
+      "request":{"method":"GET","url":"{{baseUrl}}/productos?categoria=Audio&orden=precio_asc"},
+      "event":[{"listen":"test","script":{"exec":["pm.test('200 listado',()=>pm.response.to.have.status(200));","pm.test('lista Audio',()=>pm.expect(pm.response.json().length).to.be.above(0));"]}}]
+    },
+    {
+      "name": "03 — Orden con datos relacionados | 200",
+      "request":{"method":"GET","url":"{{baseUrl}}/ordenes/3"},
+      "event":[{"listen":"test","script":{"exec":["pm.test('200 detalle',()=>pm.response.to.have.status(200));","pm.test('incluye items y cliente',()=>{ const d=pm.response.json(); pm.expect(d.items.length).to.be.above(0); pm.expect(d.cliente_nombre).to.be.a('string'); });"]}}]
+    },
+    {
+      "name": "04 — Resumen SQL | 200",
+      "request":{"method":"GET","url":"{{baseUrl}}/resumen"},
+      "event":[{"listen":"test","script":{"exec":["pm.test('200 resumen',()=>pm.response.to.have.status(200));","pm.test('métricas por categoría',()=>pm.expect(pm.response.json().ventas_categoria).to.be.an('array'));"]}}]
+    },
+    {
+      "name": "05 — Producto inválido | 400",
+      "request":{"method":"POST","header":[{"key":"Content-Type","value":"application/json"}],"url":"{{baseUrl}}/productos","body":{"mode":"raw","raw":"{\"nombre\":\"X\",\"precio\":-100,\"stock\":-2,\"categoria\":\"Audio\"}"}},
+      "event":[{"listen":"test","script":{"exec":["pm.test('400 validación servidor',()=>pm.response.to.have.status(400));","pm.test('error JSON',()=>pm.expect(pm.response.json().error).to.be.a('string'));"]}}]
+    },
+    {
+      "name": "06 — Crear producto | 201",
+      "request":{"method":"POST","header":[{"key":"Content-Type","value":"application/json"}],"url":"{{baseUrl}}/productos","body":{"mode":"raw","raw":"{\"nombre\":\"Producto de prueba Postman\",\"descripcion\":\"Registro temporal\",\"precio\":12345,\"stock\":5,\"categoria\":\"Accesorios\"}"}},
+      "event":[{"listen":"test","script":{"exec":["pm.test('201 creado',()=>pm.response.to.have.status(201));","pm.collectionVariables.set('testProductId',pm.response.json().id);"]}}]
+    },
+    {
+      "name": "07 — Editar producto | 200",
+      "request":{"method":"PUT","header":[{"key":"Content-Type","value":"application/json"}],"url":"{{baseUrl}}/productos/{{testProductId}}","body":{"mode":"raw","raw":"{\"precio\":14900,\"stock\":8}"}},
+      "event":[{"listen":"test","script":{"exec":["pm.test('200 editado',()=>pm.response.to.have.status(200));","pm.test('precio actualizado',()=>pm.expect(pm.response.json().precio).to.eql(14900));"]}}]
+    },
+    {
+      "name": "08 — Eliminar producto | 200",
+      "request":{"method":"DELETE","url":"{{baseUrl}}/productos/{{testProductId}}"},
+      "event":[{"listen":"test","script":{"exec":["pm.test('200 eliminado',()=>pm.response.to.have.status(200));"]}}]
+    },
+    {
+      "name": "09 — Consultar eliminado | 404",
+      "request":{"method":"GET","url":"{{baseUrl}}/productos/{{testProductId}}"},
+      "event":[{"listen":"test","script":{"exec":["pm.test('404 inexistente',()=>pm.response.to.have.status(404));"]}}]
+    },
+    {
+      "name": "10 — Crear cliente | 201",
+      "event":[
+        {"listen":"prerequest","script":{"exec":["pm.collectionVariables.set('testEmail','lab'+Date.now()+'@example.com');"]}},
+        {"listen":"test","script":{"exec":["pm.test('201 cliente creado',()=>pm.response.to.have.status(201));","pm.collectionVariables.set('testClientId',pm.response.json().id);"]}}
+      ],
+      "request":{"method":"POST","header":[{"key":"Content-Type","value":"application/json"}],"url":"{{baseUrl}}/clientes","body":{"mode":"raw","raw":"{\"nombre\":\"Cliente de laboratorio\",\"email\":\"{{testEmail}}\",\"ciudad\":\"Puntarenas\"}"}}
+    },
+    {
+      "name": "11 — Cliente duplicado | 409",
+      "request":{"method":"POST","header":[{"key":"Content-Type","value":"application/json"}],"url":"{{baseUrl}}/clientes","body":{"mode":"raw","raw":"{\"nombre\":\"Duplicado Prueba\",\"email\":\"{{testEmail}}\",\"ciudad\":\"Puntarenas\"}"}},
+      "event":[{"listen":"test","script":{"exec":["pm.test('409 correo duplicado',()=>pm.response.to.have.status(409));"]}}]
+    },
+    {
+      "name": "12 — Editar cliente | 200",
+      "request":{"method":"PATCH","header":[{"key":"Content-Type","value":"application/json"}],"url":"{{baseUrl}}/clientes/{{testClientId}}","body":{"mode":"raw","raw":"{\"ciudad\":\"Heredia\"}"}},
+      "event":[{"listen":"test","script":{"exec":["pm.test('200 editado',()=>pm.response.to.have.status(200));","pm.test('ciudad actualizada',()=>pm.expect(pm.response.json().ciudad).to.eql('Heredia'));"]}}]
+    },
+    {
+      "name": "13 — Stock insuficiente | 409",
+      "request":{"method":"POST","header":[{"key":"Content-Type","value":"application/json"}],"url":"{{baseUrl}}/ordenes","body":{"mode":"raw","raw":"{\"cliente_id\":{{testClientId}},\"items\":[{\"producto_id\":1,\"cantidad\":9999}]}"}},
+      "event":[{"listen":"test","script":{"exec":["pm.test('409 conflicto inventario',()=>pm.response.to.have.status(409));"]}}]
+    },
+    {
+      "name": "14 — Crear orden con cupón | 201",
+      "request":{"method":"POST","header":[{"key":"Content-Type","value":"application/json"}],"url":"{{baseUrl}}/ordenes","body":{"mode":"raw","raw":"{\"cliente_id\":{{testClientId}},\"cupon\":\"TECH15\",\"items\":[{\"producto_id\":7,\"cantidad\":1}]}"}},
+      "event":[{"listen":"test","script":{"exec":["pm.test('201 orden creada',()=>pm.response.to.have.status(201));","pm.collectionVariables.set('testOrderId',pm.response.json().id);","pm.test('cupón descontado',()=>pm.expect(pm.response.json().descuento).to.be.above(0));"]}}]
+    },
+    {
+      "name": "15 — Detalle de la nueva orden | 200",
+      "request":{"method":"GET","url":"{{baseUrl}}/ordenes/{{testOrderId}}"},
+      "event":[{"listen":"test","script":{"exec":["pm.test('200 detalle orden',()=>pm.response.to.have.status(200));","pm.test('items relacionados',()=>pm.expect(pm.response.json().items).to.have.length(1));"]}}]
+    },
+    {
+      "name": "16 — Confirmar pago simulado y descontar stock | 200",
+      "request":{"method":"PATCH","header":[{"key":"Content-Type","value":"application/json"}],"url":"{{baseUrl}}/ordenes/{{testOrderId}}/estado","body":{"mode":"raw","raw":"{\"estado\":\"pagada\"}"}},
+      "event":[{"listen":"test","script":{"exec":["pm.test('200 pagada',()=>pm.response.to.have.status(200));","pm.test('estado pagada',()=>pm.expect(pm.response.json().estado).to.eql('pagada'));"]}}]
+    },
+    {
+      "name": "17 — Cupón duplicado por cliente | 409",
+      "request":{"method":"POST","header":[{"key":"Content-Type","value":"application/json"}],"url":"{{baseUrl}}/ordenes","body":{"mode":"raw","raw":"{\"cliente_id\":{{testClientId}},\"cupon\":\"TECH15\",\"items\":[{\"producto_id\":7,\"cantidad\":1}]}"}},
+      "event":[{"listen":"test","script":{"exec":["pm.test('409 cupón ya usado',()=>pm.response.to.have.status(409));"]}}]
+    },
+    {
+      "name": "18 — Marcar enviada | 200",
+      "request":{"method":"PATCH","header":[{"key":"Content-Type","value":"application/json"}],"url":"{{baseUrl}}/ordenes/{{testOrderId}}/estado","body":{"mode":"raw","raw":"{\"estado\":\"enviada\"}"}},
+      "event":[{"listen":"test","script":{"exec":["pm.test('200 enviada',()=>pm.response.to.have.status(200));"]}}]
+    },
+    {
+      "name": "19 — Cancelar enviada prohibido | 409",
+      "request":{"method":"PATCH","header":[{"key":"Content-Type","value":"application/json"}],"url":"{{baseUrl}}/ordenes/{{testOrderId}}/estado","body":{"mode":"raw","raw":"{\"estado\":\"cancelada\"}"}},
+      "event":[{"listen":"test","script":{"exec":["pm.test('409 transición inválida',()=>pm.response.to.have.status(409));"]}}]
+    },
+    {
+      "name": "20 — Marcar entregada | 200",
+      "request":{"method":"PATCH","header":[{"key":"Content-Type","value":"application/json"}],"url":"{{baseUrl}}/ordenes/{{testOrderId}}/estado","body":{"mode":"raw","raw":"{\"estado\":\"entregada\"}"}},
+      "event":[{"listen":"test","script":{"exec":["pm.test('200 entregada',()=>pm.response.to.have.status(200));"]}}]
+    },
+    {
+      "name": "21 — Eliminar cliente con órdenes prohibido | 409",
+      "request":{"method":"DELETE","url":"{{baseUrl}}/clientes/{{testClientId}}"},
+      "event":[{"listen":"test","script":{"exec":["pm.test('409 integridad referencial',()=>pm.response.to.have.status(409));"]}}]
+    },
+    {
+      "name": "22 — Demo reglas locales | 200",
+      "request":{"method":"POST","header":[{"key":"Content-Type","value":"application/json"}],"url":"{{baseUrl}}/ia/demo","body":{"mode":"raw","raw":"{\"tipo\":\"descripcion\",\"producto_id\":1}"}},
+      "event":[{"listen":"test","script":{"exec":["pm.test('200 demo',()=>pm.response.to.have.status(200));","pm.test('no se presenta como IA',()=>pm.expect(pm.response.json().data.modo).to.eql('demo-reglas'));"]}}]
+    },
+    {
+      "name": "23 — Resumen actualizado | 200",
+      "request":{"method":"GET","url":"{{baseUrl}}/resumen"},
+      "event":[{"listen":"test","script":{"exec":["pm.test('200 métricas SQL actualizadas',()=>pm.response.to.have.status(200));","pm.test('ingresos positivos',()=>pm.expect(pm.response.json().ingresos).to.be.above(0));"]}}]
+    }
+  ]
+}
